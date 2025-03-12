@@ -1,0 +1,37 @@
+name: Selenium Integration Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Dependencies
+      run: |
+        pip install -r requirements.txt
+
+    - name: Setup Chrome & ChromeDriver
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        wget -N https://chromedriver.storage.googleapis.com/$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
+        unzip chromedriver_linux64.zip
+        sudo mv chromedriver /usr/local/bin/
+        sudo chmod +x /usr/local/bin/chromedriver
+
+    - name: Start Web Server
+      run: |
+        sudo systemctl start apache2  # Sesuaikan dengan server yang digunakan
+
+    - name: Run Selenium Tests in Parallel
+      run: |
+        pytest tests/ -n 5
