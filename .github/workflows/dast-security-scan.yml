@@ -349,3 +349,43 @@ jobs:
       with:
         name: dast-security-reports
         path: reports/ 
+
+    - name: Buat Issue jika ditemukan kerentanan
+      if: always()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Cek apakah ada kerentanan yang ditemukan dalam laporan
+        ISSUES=""
+
+        if grep -q "KERENTANAN TERDETEKSI" reports/sqli-test.md; then
+          ISSUES="${ISSUES}\n- **SQL Injection** ditemukan pada aplikasi."
+        fi
+
+        if grep -q "KERENTANAN TERDETEKSI" reports/xss-test.md; then
+          ISSUES="${ISSUES}\n- **Cross-Site Scripting (XSS)** ditemukan dalam input pengguna."
+        fi
+
+        if grep -q "Tidak menggunakan HTTPS" reports/baseline-scan.md; then
+          ISSUES="${ISSUES}\n- **Aplikasi berjalan tanpa HTTPS**, rentan terhadap serangan MITM."
+        fi
+
+        if grep -q "Tidak ada header X-Frame-Options" reports/baseline-scan.md; then
+          ISSUES="${ISSUES}\n- **Tidak ada header X-Frame-Options**, risiko clickjacking."
+        fi
+
+        if grep -q "Tidak ada header Content-Security-Policy" reports/baseline-scan.md; then
+          ISSUES="${ISSUES}\n- **Tidak ada header Content-Security-Policy (CSP)**, potensi serangan XSS."
+        fi
+
+        # Jika ada kerentanan yang ditemukan, buat issue di GitHub
+        if [ -n "$ISSUES" ]; then
+          echo -e "### ⚠️ Hasil Pemindaian DAST - Kerentanan Ditemukan!\n$ISSUES\n\n🚀 Silakan perbaiki kerentanan ini secepatnya!" > issue_body.md
+          
+          gh issue create \
+            --title "⚠️ Kerentanan Ditemukan dalam DAST Scan" \
+            --body-file issue_body.md \
+            --label "security, DAST, bug"
+        else
+          echo "Tidak ada kerentanan yang ditemukan. Tidak membuat issue."
+        fi
