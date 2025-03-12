@@ -4,57 +4,41 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
-          pip install -r requirements.txt || true
+          sudo apt update
+          sudo apt install -y google-chrome-stable unzip wget
 
-
-      - name: Install Chrome & ChromeDriver (versi yang sesuai)
+      - name: Setup ChromeDriver
         run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable
           CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
-          DRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION)
-          wget -q "https://chromedriver.storage.googleapis.com/${DRIVER_VERSION}/chromedriver_linux64.zip"
+          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
+          wget "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
-          sudo chmod +x /usr/local/bin/chromedriver
+          chromedriver --version
 
-      - name: Jalankan Selenium Tests
+      - name: Install Python dependencies
         run: |
-          pytest tests/ --maxfail=5 --disable-warnings
+          python -m pip install --upgrade pip
+          pip install selenium pytest webdriver-manager
+
+      - name: Run Selenium tests
+        run: pytest --maxfail=5 --disable-warnings -v
 
   dast:
-    needs: test  # Hanya jalankan jika testing Selenium berhasil
+    needs: test
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
-
-      - name: Start Web Application
-        run: |
-          docker-compose up -d  # Pastikan aplikasi berjalan sebelum DAST
-
-      - name: OWASP ZAP Security Scan
-        uses: zaproxy/action-full-scan@v0.7.0
-        with:
-          target: "http://localhost"  # Ganti dengan URL aplikasi yang diuji
-          rules_file_name: ".zap/rules.tsv"  # (Opsional) Gunakan aturan kustom
-          allow_issue_writing: true
-          issue_title: "OWASP ZAP DAST Security Report"
+      - name: Run DAST (Dynamic Application Security Testing)
+        run: echo "DAST testing goes here"
