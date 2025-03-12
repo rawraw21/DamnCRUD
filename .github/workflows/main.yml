@@ -1,44 +1,56 @@
-name: CI/CD dengan Selenium & DAST
+name: Selenium Integration Test & DAST
 
-on:
-  push:
-    branches:
-      - main
+on: [push, pull_request]
 
 jobs:
   test:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Install dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y google-chrome-stable unzip wget
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-      - name: Setup ChromeDriver
+      - name: Install Dependencies
         run: |
+          pip install selenium pytest pytest-xdist
+          pip install -r requirements.txt || true
+
+      - name: Setup Chrome and ChromeDriver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
           CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
-          CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-          wget "https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip"
+          CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION)
+          wget -N https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
-          chromedriver --version
+          sudo chmod +x /usr/local/bin/chromedriver
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install selenium pytest webdriver-manager
-
-      - name: Run Selenium tests
-        run: pytest --maxfail=5 --disable-warnings -v
+      - name: Run Selenium Tests
+        run: pytest tests/ -n 5
 
   dast:
     needs: test
     runs-on: ubuntu-latest
-
     steps:
-      - name: Run DAST (Dynamic Application Security Testing)
-        run: echo "DAST testing goes here"
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup OWASP ZAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zaproxy
+          chmod +x run_dast.sh
+
+      - name: Run DAST Scan
+        run: ./run_dast.sh
+
+      - name: Upload DAST Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dast-report
+          path: dast_report.html
