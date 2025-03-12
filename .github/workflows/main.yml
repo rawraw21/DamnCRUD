@@ -1,6 +1,12 @@
-name: Selenium Integration Test
+name: CI/CD dengan Selenium & DAST
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   test:
@@ -16,16 +22,36 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install selenium
           pip install -r requirements.txt || true
 
-      - name: Setup Chrome and ChromeDriver  # <- HARUS ADA DI DALAM `steps`
+      - name: Setup Chrome dan ChromeDriver
         run: |
           sudo apt-get update
           sudo apt-get install -y google-chrome-stable
-          CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
-          CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)
-          wget -N https://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip
+          wget -q https://chromedriver.storage.googleapis.com/$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE)/chromedriver_linux64.zip
           unzip chromedriver_linux64.zip
           sudo mv chromedriver /usr/local/bin/
           sudo chmod +x /usr/local/bin/chromedriver
+
+      - name: Jalankan Selenium Tests
+        run: |
+          pytest tests/ --maxfail=5 --disable-warnings
+
+  dast:
+    needs: test  # Hanya jalankan jika testing Selenium berhasil
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Start Web Application
+        run: |
+          docker-compose up -d  # Pastikan aplikasi berjalan sebelum DAST
+
+      - name: OWASP ZAP Security Scan
+        uses: zaproxy/action-full-scan@v0.7.0
+        with:
+          target: "http://localhost"  # Ganti dengan URL aplikasi yang diuji
+          rules_file_name: ".zap/rules.tsv"  # (Opsional) Gunakan aturan kustom
+          allow_issue_writing: true
+          issue_title: "OWASP ZAP DAST Security Report"
